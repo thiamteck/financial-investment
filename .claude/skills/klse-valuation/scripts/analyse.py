@@ -559,6 +559,7 @@ def main():
     ]
 
     report = "\n".join(lines)
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     print(report)
 
 
