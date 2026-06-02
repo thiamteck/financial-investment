@@ -21,27 +21,29 @@ from fetch import init_session, yf_get, http_get
 def resolve_ticker(input_str):
     if input_str.upper().endswith(".KL"):
         return input_str.upper()
+
+    import re
+
+    # Try Yahoo Finance search API — append "KL" to bias toward Bursa results
     try:
-        url = f"https://www.klsescreener.com/v2/screener/stock?keyword={urllib.parse.quote(input_str)}"
-        html = http_get(url)
-        # Find first stock code — 4-digit number in a table href like /stocks/view/1155
-        import re
-        m = re.search(r"/stocks/view/(\d{4})", html)
-        if m:
-            return f"{m.group(1)}.KL"
+        query = urllib.parse.quote(f"{input_str} KL")
+        url = f"https://query1.finance.yahoo.com/v1/finance/search?q={query}&quotesCount=10&newsCount=0&enableFuzzyQuery=false"
+        data = json.loads(http_get(url))
+        for q in data.get("quotes", []):
+            sym = q.get("symbol", "")
+            if sym.endswith(".KL") and q.get("quoteType") == "EQUITY":
+                print(f"[INFO] Resolved via Yahoo Finance search: {sym}", file=sys.stderr)
+                return sym
     except Exception as e:
-        print(f"[WARN] KLSE Screener ticker resolution failed: {e}", file=sys.stderr)
-    # Fallback: Yahoo Finance lookup
-    try:
-        url = f"https://finance.yahoo.com/lookup?s={urllib.parse.quote(input_str)}+KL"
-        html = http_get(url)
-        import re
-        m = re.search(r'(\d{4})\.KL', html)
-        if m:
-            return m.group(0)
-    except Exception as e:
-        print(f"[WARN] Yahoo Finance lookup failed: {e}", file=sys.stderr)
-    sys.exit(f"ERROR: Could not resolve '{input_str}' to a .KL ticker.")
+        print(f"[WARN] Yahoo Finance search failed: {e}", file=sys.stderr)
+
+    # If running standalone (not via Claude skill), we cannot call WebSearch.
+    # Instruct the user to resolve manually.
+    sys.exit(
+        f"ERROR: Could not auto-resolve '{input_str}' to a .KL ticker.\n"
+        f"  Tip: Search for '{input_str} Bursa stock code' and pass the ticker directly.\n"
+        f"  Example: python analyse.py 5212.KL"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +154,7 @@ def detect_sector(ticker, klse_html):
             s = sector.lower()
             if "bank" in s or "financ" in s:
                 return label, "Bank"
-            if "reit" in s:
+            if "reit" in s or "real estate" in s:
                 return label, "REIT"
             if "plantation" in s:
                 return label, "Plantation"
@@ -196,6 +198,13 @@ def run_dcf(op_cf, fcf, net_income, div_payout, net_debt, shares, rev_cagr, comp
             note = "retained earnings proxy (bank)"
         else:
             return None, None, None, "skipped — bank net income unavailable"
+    elif company_type == "REIT":
+        # REITs distribute most income; use op_cf as distributable income proxy.
+        # Negative FCF is normal (property capex) and should not drive DCF.
+        fcf_base = op_cf
+        note = "op CF proxy (REIT — FCF excluded)"
+        if fcf_base and fcf_base < 0:
+            return None, None, None, "skipped — negative op CF, use DDM instead"
     else:
         fcf_base = fcf or op_cf
         note = "FCF" if fcf else "op CF proxy"

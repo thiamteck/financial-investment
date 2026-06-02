@@ -25,22 +25,28 @@ Stock ticker (`XXXX.KL`) or company name (e.g. "Maybank", "Pavilion REIT").
 
 ## Quick Start
 
-Run the analysis script directly:
+**Step 1 — Resolve the ticker (if only a company name is given):**
+
+Use WebSearch to find the Bursa stock code before running the script:
+```
+WebSearch: "{company name} Bursa Malaysia stock code ticker"
+```
+Extract the 4-digit code from the result (e.g. `5212` for Pavilion REIT) and append `.KL`.
+
+**Step 2 — Run the analysis script:**
 
 ```
-python scripts/analyse.py <ticker_or_name>
+python scripts/analyse.py <TICKER.KL>
 ```
 
 Examples:
 ```
 python scripts/analyse.py 1155.KL
-python scripts/analyse.py maybank
-python scripts/analyse.py "Pavilion REIT"
+python scripts/analyse.py 5212.KL
+python scripts/analyse.py 5168.KL
 ```
 
-The script handles all data fetching, valuation, and report generation automatically.
 The report is printed to stdout — pipe to a file if needed:
-
 ```
 python scripts/analyse.py 1155.KL > report.txt
 ```
@@ -61,7 +67,7 @@ Both scripts use Python stdlib only (`urllib`, `json`, `ssl`, `http.cookiejar`, 
 ## Execution Flow (what `analyse.py` does)
 
 ```
-Step 0  →  Resolve ticker from name if needed (KLSE Screener, Yahoo Finance lookup)
+Step 0  →  Resolve ticker from name if needed — WebSearch first, then script
 Step 1  →  Fetch financial data (Yahoo Finance JSON API — quoteSummary + chart)
 Step 2  →  Fetch analyst & peer data (KLSE Screener)
 Step 3  →  Fetch analyst calls & dividend history (i3investor)
